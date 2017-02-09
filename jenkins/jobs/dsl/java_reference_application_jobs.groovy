@@ -16,8 +16,6 @@ def codeAnalysisJob = freeStyleJob(projectFolderName + "/Reference_Application_C
 def deployJob = freeStyleJob(projectFolderName + "/Reference_Application_Deploy")
 def regressionTestJob = freeStyleJob(projectFolderName + "/Reference_Application_Regression_Tests")
 def performanceTestJob = freeStyleJob(projectFolderName + "/Reference_Application_Performance_Tests")
-def deployJobToProdA = freeStyleJob(projectFolderName + "/Reference_Application_Deploy_ProdA")
-def deployJobToProdB = freeStyleJob(projectFolderName + "/Reference_Application_Deploy_ProdB")
 
 // Views
 def pipelineView = buildPipelineView(projectFolderName + "/Java_Reference_Application")
@@ -420,123 +418,10 @@ performanceTestJob.with {
                 reportFiles('petclinic_test_plan.html')
             }
         }
-        buildPipelineTrigger(projectFolderName + "/Reference_Application_Deploy_ProdA") {
-            parameters {
-                predefinedProp("B", '${B}')
-                predefinedProp("PARENT_BUILD", '${PARENT_BUILD}')
-            }
-        }
     }
     configure { project ->
         project / publishers << 'io.gatling.jenkins.GatlingPublisher' {
             enabled true
         }
-    }
-}
-
-deployJobToProdA.with {
-    description("This job deploys the java reference application to the ProdA environment")
-    parameters {
-        stringParam("B", '', "Parent build number")
-        stringParam("PARENT_BUILD", "Reference_Application_Build", "Parent build name")
-        stringParam("ENVIRONMENT_NAME", "PRODA", "Name of the environment.")
-    }
-    wrappers {
-        preBuildCleanup()
-        injectPasswords()
-        maskPasswords()
-        sshAgent("adop-jenkins-master")
-    }
-    environmentVariables {
-        env('WORKSPACE_NAME', workspaceFolderName)
-        env('PROJECT_NAME', projectFolderName)
-    }
-    label("docker")
-    steps {
-        copyArtifacts("Reference_Application_Build") {
-            buildSelector {
-                buildNumber('${B}')
-                includePatterns('target/petclinic.war')
-            }
-        }
-        shell('''
-            |export SERVICE_NAME="$(echo ${PROJECT_NAME} | tr '/' '_')_${ENVIRONMENT_NAME}"
-            |docker cp ${WORKSPACE}/target/petclinic.war  ${SERVICE_NAME}:/usr/local/tomcat/webapps/
-            |docker restart ${SERVICE_NAME}
-            |COUNT=1
-            |while ! curl -q http://${SERVICE_NAME}:8080/petclinic -o /dev/null
-            |do
-            |  if [ ${COUNT} -gt 10 ]; then
-            |    echo "Docker build failed even after ${COUNT}. Please investigate."
-            |    exit 1
-            |  fi
-            |  echo "Application is not up yet. Retrying ..Attempt (${COUNT})"
-            |  sleep 5
-            |  COUNT=$((COUNT+1))
-            |done
-            |echo "=.=.=.=.=.=.=.=.=.=.=.=."
-            |echo "=.=.=.=.=.=.=.=.=.=.=.=."
-            |echo "Environment URL (replace PUBLIC_IP with your public ip address where you access jenkins from) : http://${SERVICE_NAME}.PUBLIC_IP.xip.io/petclinic"
-            |echo "=.=.=.=.=.=.=.=.=.=.=.=."
-            |echo "=.=.=.=.=.=.=.=.=.=.=.=."
-            |set -x'''.stripMargin())
-    }
-    publishers {
-        buildPipelineTrigger(projectFolderName + "/Reference_Application_Deploy_ProdB") {
-            parameters {
-                predefinedProp("B", '${B}')
-                predefinedProp("PARENT_BUILD", '${PARENT_BUILD}')
-                predefinedProp("ENVIRONMENT_PREVNODE", '${ENVIRONMENT_NAME}')
-            }
-        }
-    }
-}
-
-deployJobToProdB.with {
-    description("This job deploys the java reference application to the ProdA environment")
-    parameters {
-        stringParam("B", '', "Parent build number")
-        stringParam("PARENT_BUILD", "Reference_Application_Build", "Parent build name")
-        stringParam("ENVIRONMENT_NAME", "PRODB", "Name of the environment.")
-    }
-    wrappers {
-        preBuildCleanup()
-        injectPasswords()
-        maskPasswords()
-        sshAgent("adop-jenkins-master")
-    }
-    environmentVariables {
-        env('WORKSPACE_NAME', workspaceFolderName)
-        env('PROJECT_NAME', projectFolderName)
-    }
-    label("docker")
-    steps {
-        copyArtifacts("Reference_Application_Build") {
-            buildSelector {
-                buildNumber('${B}')
-                includePatterns('target/petclinic.war')
-            }
-        }
-        shell('''|export SERVICE_NAME="$(echo ${PROJECT_NAME} | tr '/' '_')_${ENVIRONMENT_NAME}"
-            |docker cp ${WORKSPACE}/target/petclinic.war  ${SERVICE_NAME}:/usr/local/tomcat/webapps/
-            |docker restart ${SERVICE_NAME}
-            |COUNT=1
-            |while ! curl -q http://${SERVICE_NAME}:8080/petclinic -o /dev/null
-            |do
-            |  if [ ${COUNT} -gt 10 ]; then
-            |    echo "Docker build failed even after ${COUNT}. Please investigate."
-            |    exit 1
-            |  fi
-            |  echo "Application is not up yet. Retrying ..Attempt (${COUNT})"
-            |  sleep 5
-            |  COUNT=$((COUNT+1))
-            |done
-            |echo "=.=.=.=.=.=.=.=.=.=.=.=."
-            |echo "=.=.=.=.=.=.=.=.=.=.=.=."
-            |echo "Environment URL (replace PUBLIC_IP with your public ip address where you access jenkins from) : http://${SERVICE_NAME}.PUBLIC_IP.xip.io/petclinic"
-            |echo "=.=.=.=.=.=.=.=.=.=.=.=."
-            |echo "=.=.=.=.=.=.=.=.=.=.=.=."
-            |set -x'''.stripMargin()
-        )
     }
 }
